@@ -1,0 +1,70 @@
+=========================================
+CHATBOT BACKEND RUN INSTRUCTIONS
+=========================================
+
+1. PREREQUISITES
+-----------------
+- Python 3.8 or higher installed on your system.
+- Ensure that you are in the project root directory where `app.py` and `.env` are located.
+
+2. INSTALL DEPENDENCIES
+------------------------
+Open your terminal (or PowerShell) and run the following command to install the required Python packages:
+
+    pip install -r requirements.txt
+
+*Note: The first time you run the application or tests, HuggingFace will automatically download the distilBERT machine learning model. This may take some time depending on your internet connection.*
+
+3. RUNNING THE SERVER
+----------------------
+To start the Flask backend server locally, run:
+
+    python app.py
+
+The server will start on `http://localhost:5000` by default. 
+It will automatically read the `DATABASE_URL` from your `.env` file and create the SQLite database in the `instance/` folder.
+
+4. RUNNING THE TESTS
+---------------------
+To run the unit tests and verify the 0.75 confidence branching logic, run:
+
+    python -m pytest test_chatbot.py
+
+5. INTERACTING WITH THE API
+----------------------------
+You can use tools like Postman, cURL, or ThunderClient to test the API.
+
+Example 1: POST /ask
+URL: http://localhost:5000/ask
+Method: POST
+Headers: Content-Type: application/json
+Body:
+{
+  "user_id": 1,
+  "query": "what is your refund policy?"
+}
+
+Example 2: POST /escalate
+URL: http://localhost:5000/escalate
+Method: POST
+Headers: Content-Type: application/json
+Body:
+{
+  "user_id": 2,
+  "query": "my order is wrong",
+  "confidence": 0.42
+}
+
+Example 3: POST /log
+URL: http://localhost:5000/log
+Method: POST
+Headers: Content-Type: application/json
+Body:
+{
+  "user_id": 3,
+  "query": "Where is my package?",
+  "intent": "order_status",
+  "confidence": 0.88,
+  "response": "You can track your order in the My Orders section.",
+  "escalated": false
+}
