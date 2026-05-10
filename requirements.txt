@@ -5,3 +5,6 @@ transformers
 torch
 pytest==7.4.3
 python-dotenv==1.0.0
+scikit-learn
+pandas
+kaggle
