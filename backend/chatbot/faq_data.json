@@ -1,0 +1,14 @@
+{
+  "refund_policy": "You can request a refund within 30 days.",
+  "order_status": "You can track your order in the 'My Orders' section.",
+  "shipping_issue": "Shipping usually takes 3-5 business days. We apologize for any delays.",
+  "product_inquiry": "You can find more product details on our store pages.",
+  "complaint": "We are sorry you had a bad experience. Please provide more details.",
+  "general_support": "How can I help you today?",
+  "account_issue": "If you have issues logging in or accessing your account, please reset your password or contact support.",
+  "payment_problem": "We accept credit cards, PayPal, and Apple Pay. If your payment failed, please check your billing details.",
+  "cancellation": "Orders can be canceled within 24 hours of purchase by visiting your orders page.",
+  "delivery_address": "To change your delivery address, please contact support immediately before shipment.",
+  "loyalty_points": "Earn points on every purchase! Check your current balance in your member profile.",
+  "out_of_stock": "Items out of stock are typically replenished within 2 weeks. Sign up to get notified when they arrive."
+}
