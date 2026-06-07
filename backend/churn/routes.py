@@ -87,7 +87,7 @@ def handle_predict():
         if behavior_result["status"] != "success":
             return jsonify(format_error("Failed to fetch customer behavior")), 500
 
-        behavior_rows = behavior_result["data"].get("customer_behavior", [])
+        behavior_rows = behavior_result["data"].get("behavior", [])
         if not behavior_rows:
             return jsonify(format_error(f"No behavior data found for user {user_id}")), 404
 
@@ -185,7 +185,7 @@ def handle_report():
         if behavior_result["status"] != "success":
             return jsonify(format_error("Failed to fetch customer behavior")), 500
 
-        behavior_rows = behavior_result["data"].get("customer_behavior", [])
+        behavior_rows = behavior_result["data"].get("behavior", [])
         latest_behavior = behavior_rows[0] if behavior_rows else {}
         churn_score = latest_behavior.get("churn_score", 0.0)
         risk_level = get_risk_level(churn_score) if behavior_rows else "unknown"
