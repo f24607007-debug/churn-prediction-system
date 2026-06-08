@@ -3,4 +3,29 @@ name = "gateway"
 version = "0.1.0"
 edition = "2021"
 
+[[bin]]
+name = "gateway"
+path = "src/main.rs"
+
 [dependencies]
+actix-web     = "=4.4.1"
+tokio         = { version = "=1.35.1", features = ["full"] }
+reqwest       = { version = "=0.11.27", features = ["json"] }
+serde         = { version = "=1.0.195", features = ["derive"] }
+serde_json    = "=1.0.111"
+governor      = { version = "=0.6.3", features = ["std", "dashmap"] }
+dashmap       = "=5.5.3"
+nonzero_ext   = "=0.3.0"
+uuid          = { version = "=1.6.1", features = ["v4"] }
+tracing       = "=0.1.40"
+tracing-subscriber = { version = "=0.3.18", features = ["env-filter"] }
+dotenvy       = "=0.15.7"
+jsonwebtoken  = "=8.3.0"
+actix-cors    = "=0.6.5"
+futures       = "=0.3.30"
+
+# Lock all transitive deps that have released edition2024 versions
+# to the last version that doesn't require it
+[dependencies.indexmap]
+version = "=2.2.6"
+
