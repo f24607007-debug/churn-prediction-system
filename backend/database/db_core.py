@@ -219,7 +219,7 @@ def _coerce_timestamp_utc(field, value, allow_naive=True):
 
 
 def _normalize_db_path(db_path, label):
-    if db_path is None:
+    if not db_path:
         return None
     if _is_str(db_path) and db_path.startswith("sqlite:///"):
         return db_path[len("sqlite:///") :]

@@ -105,9 +105,11 @@ def handle_health():
         db_reachable = _verify_db_connection()
         nlp_loaded = is_model_loaded()
 
-        ready = db_reachable and nlp_loaded
-        status = "success" if ready else "error"
-        code = 200 if ready else 503
+        # FIX: The endpoint is healthy as long as the DB is reachable.
+        # NLP lazy-loads on the first /ask request, so nlp_loaded=False is normal on boot.
+        status = "success" if db_reachable else "error"
+        code = 200 if db_reachable else 503
+        
         return jsonify(format_response(
             status=status,
             data={"nlp_loaded": nlp_loaded, "db_reachable": db_reachable},

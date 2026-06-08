@@ -9,7 +9,10 @@ load_dotenv()
 
 class Config:
     SECRET_KEY = os.getenv('SECRET_KEY', 'dev-secret-change-me')
-    DATABASE_URL = os.getenv('DATABASE_URL', None)          # None → db_core uses its own default path
+    DATABASE_URL = os.getenv(
+    'DATABASE_URL',
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), '..', 'backend', 'database', 'churn.db')
+)  # None → db_core uses its own default path
     CONFIDENCE_THRESHOLD = float(os.getenv('CONFIDENCE_THRESHOLD', '0.75'))
     HUGGINGFACE_MODEL = os.getenv('HUGGINGFACE_MODEL', 'typeform/distilbert-base-uncased-mnli')
     APP_ENV = os.getenv('APP_ENV', 'development')

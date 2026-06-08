@@ -1,12 +1,12 @@
-Flask==3.0.0
-Flask-Cors==4.0.0
+Flask
+Flask-Cors
 
-transformers==4.40.0
-torch==2.3.0
-scikit-learn==1.4.2
-joblib==1.4.2
-pandas==2.2.2
-numpy==1.26.4
-bcrypt==4.1.2
-pytest==7.4.3
-python-dotenv==1.0.0
+transformers
+torch
+scikit-learn
+joblib
+pandas
+numpy
+bcrypt
+pytest
+python-dotenv
