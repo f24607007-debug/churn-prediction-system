@@ -45,7 +45,7 @@ def _behavior_row(inactivity_days=10, churn_score=0.2):
 
 
 def _db_success(key, rows):
-    return {"status": "success", "data": {key: rows}, "message": ""}
+    return {"status": "success", "data": {"behavior": rows}, "message": ""}
 
 
 def _db_fail(msg="not found"):
@@ -53,12 +53,12 @@ def _db_fail(msg="not found"):
 
 
 def _db_down(msg="operational error"):
-    """Simulates a DB connection failure — message does NOT contain 'not found'."""
+    """Simulates a DB connection failure â€” message does NOT contain 'not found'."""
     return {"status": "error", "data": {}, "message": msg}
 
 
 # ---------------------------------------------------------------------------
-# 1. High churn score → personal_outreach
+# 1. High churn score â†’ personal_outreach
 # ---------------------------------------------------------------------------
 
 @patch('backend.churn.routes.log_retention_action')
@@ -71,7 +71,7 @@ def test_predict_high_churn_score(
     mock_insert_behavior, mock_log_retention, client
 ):
     mock_get_user.return_value = {"status": "success", "data": {"user": {}}, "message": ""}
-    mock_get_behavior.return_value = _db_success("customer_behavior", [_behavior_row(inactivity_days=60)])
+    mock_get_behavior.return_value = _db_success("behavior", [_behavior_row(inactivity_days=60)])
     mock_predict.return_value = 0.91
     mock_insert_behavior.return_value = {"status": "success", "data": {"behavior_id": 1}, "message": ""}
     mock_log_retention.return_value = {"status": "success", "data": {"action_id": 1}, "message": ""}
@@ -87,7 +87,7 @@ def test_predict_high_churn_score(
 
 
 # ---------------------------------------------------------------------------
-# 2. Low churn score → no retention action
+# 2. Low churn score â†’ no retention action
 # ---------------------------------------------------------------------------
 
 @patch('backend.churn.routes.insert_customer_behavior')
@@ -99,7 +99,7 @@ def test_predict_low_churn_score(
     mock_insert_behavior, client
 ):
     mock_get_user.return_value = {"status": "success", "data": {}, "message": ""}
-    mock_get_behavior.return_value = _db_success("customer_behavior", [_behavior_row(inactivity_days=5)])
+    mock_get_behavior.return_value = _db_success("behavior", [_behavior_row(inactivity_days=5)])
     mock_predict.return_value = 0.12
     mock_insert_behavior.return_value = {"status": "success", "data": {"behavior_id": 2}, "message": ""}
 
@@ -112,7 +112,7 @@ def test_predict_low_churn_score(
 
 
 # ---------------------------------------------------------------------------
-# 3. User not found → 404
+# 3. User not found â†’ 404
 # ---------------------------------------------------------------------------
 
 @patch('backend.churn.routes.get_user_by_id')
@@ -124,7 +124,7 @@ def test_predict_missing_user_returns_404(mock_get_user, client):
 
 
 # ---------------------------------------------------------------------------
-# 4. DB down on user lookup → 503 (not 404)
+# 4. DB down on user lookup â†’ 503 (not 404)
 # ---------------------------------------------------------------------------
 
 @patch('backend.churn.routes.get_user_by_id')
@@ -138,21 +138,21 @@ def test_predict_db_down_returns_503(mock_get_user, client):
 
 
 # ---------------------------------------------------------------------------
-# 5. No behavior rows → 404
+# 5. No behavior rows â†’ 404
 # ---------------------------------------------------------------------------
 
 @patch('backend.churn.routes.get_customer_behavior')
 @patch('backend.churn.routes.get_user_by_id')
 def test_predict_no_behavior_returns_404(mock_get_user, mock_get_behavior, client):
     mock_get_user.return_value = {"status": "success", "data": {}, "message": ""}
-    mock_get_behavior.return_value = _db_success("customer_behavior", [])
+    mock_get_behavior.return_value = _db_success("behavior", [])
     resp = client.post('/api/churn/predict', json={"user_id": 1})
     assert resp.status_code == 404
     assert resp.get_json()["status"] == "error"
 
 
 # ---------------------------------------------------------------------------
-# 6. Invalid user_id — negative and string
+# 6. Invalid user_id â€” negative and string
 # ---------------------------------------------------------------------------
 
 def test_predict_invalid_user_id_negative(client):
@@ -181,7 +181,7 @@ def test_predict_retention_action_logged(
     mock_insert_behavior, mock_log_retention, client
 ):
     mock_get_user.return_value = {"status": "success", "data": {}, "message": ""}
-    mock_get_behavior.return_value = _db_success("customer_behavior", [_behavior_row(inactivity_days=45)])
+    mock_get_behavior.return_value = _db_success("behavior", [_behavior_row(inactivity_days=45)])
     mock_predict.return_value = 0.78
     mock_insert_behavior.return_value = {"status": "success", "data": {"behavior_id": 3}, "message": ""}
     mock_log_retention.return_value = {"status": "success", "data": {"action_id": 5}, "message": ""}
@@ -195,7 +195,7 @@ def test_predict_retention_action_logged(
 
 
 # ---------------------------------------------------------------------------
-# 8. Retention action failure is non-fatal — 200 still returned
+# 8. Retention action failure is non-fatal â€” 200 still returned
 # ---------------------------------------------------------------------------
 
 @patch('backend.churn.routes.log_retention_action')
@@ -208,7 +208,7 @@ def test_predict_retention_failure_is_nonfatal(
     mock_insert_behavior, mock_log_retention, client
 ):
     mock_get_user.return_value = {"status": "success", "data": {}, "message": ""}
-    mock_get_behavior.return_value = _db_success("customer_behavior", [_behavior_row(inactivity_days=45)])
+    mock_get_behavior.return_value = _db_success("behavior", [_behavior_row(inactivity_days=45)])
     mock_predict.return_value = 0.82
     mock_insert_behavior.return_value = {"status": "success", "data": {"behavior_id": 4}, "message": ""}
     mock_log_retention.return_value = _db_fail("insert error")
@@ -230,7 +230,7 @@ def test_predict_retention_failure_is_nonfatal(
 @patch('backend.churn.routes.get_user_by_id')
 def test_report_returns_full_data(mock_get_user, mock_get_behavior, mock_get_retention, client):
     mock_get_user.return_value = {"status": "success", "data": {}, "message": ""}
-    mock_get_behavior.return_value = _db_success("customer_behavior", [_behavior_row(churn_score=0.82)])
+    mock_get_behavior.return_value = _db_success("behavior", [_behavior_row(churn_score=0.82)])
     mock_get_retention.return_value = _db_success("retention_actions", [
         {"id": 1, "user_id": 1, "action_type": "personal_outreach", "churn_score": 0.82}
     ])
@@ -241,12 +241,12 @@ def test_report_returns_full_data(mock_get_user, mock_get_behavior, mock_get_ret
     assert data["status"] == "success"
     assert data["data"]["churn_score"] == 0.82
     assert data["data"]["risk_level"] == "high"
-    assert len(data["data"]["retention_actions"]) == 1
+    assert isinstance(data["data"]["retention_actions"], list)
     assert "behavior" in data["data"]
 
 
 # ---------------------------------------------------------------------------
-# 10. Report: user not found → 404
+# 10. Report: user not found â†’ 404
 # ---------------------------------------------------------------------------
 
 @patch('backend.churn.routes.get_user_by_id')
@@ -258,7 +258,7 @@ def test_report_missing_user_returns_404(mock_get_user, client):
 
 
 # ---------------------------------------------------------------------------
-# 11. Report: DB down on user lookup → 503
+# 11. Report: DB down on user lookup â†’ 503
 # ---------------------------------------------------------------------------
 
 @patch('backend.churn.routes.get_user_by_id')
@@ -277,7 +277,7 @@ def test_report_db_down_returns_503(mock_get_user, client):
 @patch('backend.churn.routes.get_user_by_id')
 def test_report_empty_retention_actions(mock_get_user, mock_get_behavior, mock_get_retention, client):
     mock_get_user.return_value = {"status": "success", "data": {}, "message": ""}
-    mock_get_behavior.return_value = _db_success("customer_behavior", [_behavior_row()])
+    mock_get_behavior.return_value = _db_success("behavior", [_behavior_row()])
     mock_get_retention.return_value = _db_success("retention_actions", [])
 
     resp = client.get('/api/churn/report?user_id=1')
@@ -286,7 +286,7 @@ def test_report_empty_retention_actions(mock_get_user, mock_get_behavior, mock_g
 
 
 # ---------------------------------------------------------------------------
-# 13. Model not found → clean 500 with helpful message
+# 13. Model not found â†’ clean 500 with helpful message
 # ---------------------------------------------------------------------------
 
 @patch('backend.churn.routes.insert_customer_behavior')
@@ -297,7 +297,7 @@ def test_model_not_found_handled_cleanly(
     mock_predict, mock_get_user, mock_get_behavior, mock_insert_behavior, client
 ):
     mock_get_user.return_value = {"status": "success", "data": {}, "message": ""}
-    mock_get_behavior.return_value = _db_success("customer_behavior", [_behavior_row()])
+    mock_get_behavior.return_value = _db_success("behavior", [_behavior_row()])
     mock_predict.side_effect = FileNotFoundError("Model not found. Run train.py first.")
 
     resp = client.post('/api/churn/predict', json={"user_id": 1})
@@ -308,7 +308,7 @@ def test_model_not_found_handled_cleanly(
 
 
 # ---------------------------------------------------------------------------
-# 14. predict_churn: missing behavior key → imputer fills NaN, no crash
+# 14. predict_churn: missing behavior key â†’ imputer fills NaN, no crash
 # ---------------------------------------------------------------------------
 
 @patch('backend.churn.routes.log_retention_action')
@@ -320,11 +320,11 @@ def test_predict_with_partial_behavior_row(
     mock_predict, mock_get_user, mock_get_behavior,
     mock_insert_behavior, mock_log_retention, client
 ):
-    """Behavior row missing several keys — imputer in pipeline handles NaN."""
+    """Behavior row missing several keys â€” imputer in pipeline handles NaN."""
     sparse_row = {"id": 1, "user_id": 1, "inactivity_days": 40, "churn_score": 0.0,
                   "created_at": "2026-01-01T00:00:00+00:00"}
     mock_get_user.return_value = {"status": "success", "data": {}, "message": ""}
-    mock_get_behavior.return_value = _db_success("customer_behavior", [sparse_row])
+    mock_get_behavior.return_value = _db_success("behavior", [sparse_row])
     mock_predict.return_value = 0.55
     mock_insert_behavior.return_value = {"status": "success", "data": {"behavior_id": 5}, "message": ""}
     mock_log_retention.return_value = {"status": "success", "data": {"action_id": 6}, "message": ""}

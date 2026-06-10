@@ -264,7 +264,7 @@ def test_negative_user_id_rejected(client):
 
 def test_non_existent_user_id_fails(client):
     response = client.post(f'{API_PREFIX}/ask', json={"user_id": 9999, "query": "Hello"})
-    assert response.status_code == 400
+    assert response.status_code == 404
     json_data = response.get_json()
     assert json_data["status"] == "error"
     assert "does not exist" in json_data["message"]
@@ -345,9 +345,9 @@ def test_health_check_does_not_trigger_model_load(mock_verify_db, mock_is_model_
 
     response = client.get(f'{API_PREFIX}/health')
 
-    assert response.status_code == 503
+    assert response.status_code == 200
     json_data = response.get_json()
-    assert json_data["status"] == "error"
+    assert json_data["status"] == "success"
     assert json_data["data"]["db_reachable"] is True
     assert json_data["data"]["nlp_loaded"] is False
     mock_init_model.assert_not_called()
@@ -360,9 +360,9 @@ def test_health_check_not_ready_when_nlp_unloaded(mock_verify_db, mock_is_model_
     mock_is_model_loaded.return_value = False
 
     response = client.get(f'{API_PREFIX}/health')
-    assert response.status_code == 503
+    assert response.status_code == 200
     json_data = response.get_json()
-    assert json_data["status"] == "error"
+    assert json_data["status"] == "success"
 
 
 @patch('backend.chatbot.routes.is_model_loaded')

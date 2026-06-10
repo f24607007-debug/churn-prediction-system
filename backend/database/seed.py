@@ -17,6 +17,9 @@ import sys
 # ---------------------------------------------------------------------------
 # Safety guard — must be explicitly running in development
 # ---------------------------------------------------------------------------
+from dotenv import load_dotenv
+load_dotenv()
+
 if os.getenv("APP_ENV") != "development":
     print("ERROR: Seed script refused to run.")
     print("       Set APP_ENV=development to allow seeding.")
@@ -146,14 +149,17 @@ def _seed_retention_actions(cursor, base_now):
     print("[seed] Inserted 4 retention_actions rows.")
 
 
+from backend.database.db_core import _resolve_db_path
+
 def seed_data():
     # -----------------------------------------------------------------------
     # Drop existing dev DB so seed is always reproducible
     # -----------------------------------------------------------------------
-    if os.path.exists(DB_PATH):
+    actual_db_path = _resolve_db_path()
+    if os.path.exists(actual_db_path):
         try:
-            os.remove(DB_PATH)
-            print(f"[seed] Removed existing database at {DB_PATH}")
+            os.remove(actual_db_path)
+            print(f"[seed] Removed existing database at {actual_db_path}")
         except Exception as e:
             print(f"[seed] ERROR removing database: {e}")
             return
@@ -176,5 +182,6 @@ def seed_data():
 
 if __name__ == "__main__":
     seed_data()
+    from backend.database.db_core import _resolve_db_path
     print("\n[seed] Database seeded successfully.")
-    print(f"[seed] DB location: {DB_PATH}")
+    print(f"[seed] DB location: {_resolve_db_path()}")
