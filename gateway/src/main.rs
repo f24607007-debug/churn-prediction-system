@@ -32,23 +32,13 @@ use serde::{Deserialize, Serialize};
 use tracing::{error, info, warn};
 use uuid::Uuid;
 
-// ─────────────────────────────────────────────
-// Config (read once from env at startup)
-// ─────────────────────────────────────────────
-
 #[derive(Clone, Debug)]
 struct Config {
-    /// Full base URL of the Flask backend, e.g. "http://127.0.0.1:5000"
     backend_url: String,
-    /// HMAC-SHA256 secret used to verify JWTs issued by the auth service
     jwt_secret: String,
-    /// Rate-limit: requests per second per IP (token-bucket replenish rate)
     rate_limit_rps: NonZeroU32,
-    /// Maximum burst above the replenish rate
     rate_limit_burst: NonZeroU32,
-    /// Comma-separated list of allowed CORS origins
     allowed_origins: Vec<String>,
-    /// Gateway listen port
     port: u16,
 }
 
@@ -61,7 +51,7 @@ impl Config {
             .expect("JWT_SECRET must be set — refusing to start without it");
 
         if jwt_secret.len() < 32 {
-            panic!("JWT_SECRET is too short (must be ≥ 32 chars)");
+            panic!("JWT_SECRET is too short (must be >= 32 chars)");
         }
 
         let rate_limit_rps: NonZeroU32 = std::env::var("RATE_LIMIT_RPS")
@@ -99,43 +89,25 @@ impl Config {
     }
 }
 
-// ─────────────────────────────────────────────
-// JWT claims
-// ─────────────────────────────────────────────
-
 #[derive(Debug, Serialize, Deserialize)]
 struct Claims {
-    sub: String, // subject / user_id (string)
-    exp: usize,  // expiry (Unix timestamp)
-    iat: usize,  // issued-at
+    sub: String,
+    exp: usize,
+    iat: usize,
     #[serde(default)]
     role: Option<String>,
 }
 
-// ─────────────────────────────────────────────
-// Shared application state
-// ─────────────────────────────────────────────
-
-/// Per-IP rate-limiter map.  Each entry is an independent token-bucket
-/// keyed by the client's IP address string.  Entries are evicted after
-/// `LIMITER_TTL_SECS` seconds of inactivity to bound memory growth.
 type IpLimiter = RateLimiter<NotKeyed, InMemoryState, DefaultClock>;
 
-const LIMITER_TTL_SECS: u64 = 300; // 5 minutes
+const LIMITER_TTL_SECS: u64 = 300;
 
 struct AppState {
     config: Config,
-    /// Single shared HTTP client (connection-pooled, Send + Sync)
     http_client: Client,
-    /// Per-IP token-bucket limiters
     rate_limiters: Arc<DashMap<String, (IpLimiter, std::time::Instant)>>,
-    /// Shared quota definition (one per-IP bucket is built from this)
     quota: Quota,
 }
-
-// ─────────────────────────────────────────────
-// Error type
-// ─────────────────────────────────────────────
 
 #[derive(Debug, Serialize)]
 struct GatewayError {
@@ -147,11 +119,7 @@ struct GatewayError {
 
 impl GatewayError {
     fn new(message: impl Into<String>) -> Self {
-        Self {
-            status: "error",
-            message: message.into(),
-            request_id: None,
-        }
+        Self { status: "error", message: message.into(), request_id: None }
     }
     fn with_request_id(mut self, id: impl Into<String>) -> Self {
         self.request_id = Some(id.into());
@@ -165,11 +133,6 @@ impl std::fmt::Display for GatewayError {
     }
 }
 
-// ─────────────────────────────────────────────
-// Helpers
-// ─────────────────────────────────────────────
-
-/// Extract the Bearer token from the Authorization header.
 fn extract_bearer(req: &HttpRequest) -> Option<&str> {
     req.headers()
         .get("Authorization")?
@@ -178,41 +141,24 @@ fn extract_bearer(req: &HttpRequest) -> Option<&str> {
         .strip_prefix("Bearer ")
 }
 
-/// Validate the JWT and return the decoded claims.
 fn validate_jwt(token: &str, secret: &str) -> Result<Claims, &'static str> {
     let key = DecodingKey::from_secret(secret.as_bytes());
     let mut validation = Validation::new(Algorithm::HS256);
     validation.validate_exp = true;
-
     decode::<Claims>(token, &key, &validation)
         .map(|data| data.claims)
         .map_err(|_| "Invalid or expired token")
 }
 
-/// Derive the forwarding URL: strip the `/api` prefix that the gateway owns,
-/// then prepend the backend base URL.
-///
-/// Example:
-///   incoming  → GET /api/chatbot/ask
-///   forwarded → GET http://127.0.0.1:5000/api/chatbot/ask
 fn build_upstream_url(config: &Config, req: &HttpRequest) -> String {
     let path = req.uri().path();
-    let query = req
-        .uri()
-        .query()
-        .map(|q| format!("?{q}"))
-        .unwrap_or_default();
+    let query = req.uri().query().map(|q| format!("?{q}")).unwrap_or_default();
     format!("{}{path}{query}", config.backend_url)
 }
 
-/// Generate a per-request correlation ID injected as `X-Request-ID`.
 fn new_request_id() -> String {
     Uuid::new_v4().to_string()
 }
-
-// ─────────────────────────────────────────────
-// Health probe (unauthenticated)
-// ─────────────────────────────────────────────
 
 async fn health() -> HttpResponse {
     HttpResponse::Ok().json(serde_json::json!({
@@ -221,14 +167,10 @@ async fn health() -> HttpResponse {
     }))
 }
 
-// ─────────────────────────────────────────────
-// Core proxy handler
-// ─────────────────────────────────────────────
-
 async fn proxy(req: HttpRequest, body: web::Bytes, data: web::Data<AppState>) -> HttpResponse {
     let request_id = new_request_id();
 
-    // ── 1. Per-IP Rate limit ───────────────────────────────────────────────
+    // 1. Rate limiting
     let client_ip = req
         .connection_info()
         .realip_remote_addr()
@@ -241,7 +183,7 @@ async fn proxy(req: HttpRequest, body: web::Bytes, data: web::Data<AppState>) ->
             .rate_limiters
             .entry(client_ip.clone())
             .or_insert_with(|| (RateLimiter::direct(data.quota), now));
-        entry.1 = now; // refresh last-seen timestamp
+        entry.1 = now;
         if entry.0.check().is_err() {
             warn!(request_id = %request_id, ip = %client_ip, "Rate limit exceeded");
             return HttpResponse::TooManyRequests().json(
@@ -251,7 +193,7 @@ async fn proxy(req: HttpRequest, body: web::Bytes, data: web::Data<AppState>) ->
         }
     }
 
-    // ── 2. Authentication (skip /health and /api/chatbot/health) ──────────
+    // 2. Authentication
     let path = req.uri().path();
     let is_health = path == "/health" || path == "/api/chatbot/health";
 
@@ -261,15 +203,13 @@ async fn proxy(req: HttpRequest, body: web::Bytes, data: web::Data<AppState>) ->
             Some(t) => t,
             None => {
                 return HttpResponse::Unauthorized().json(
-                    GatewayError::new("Missing Authorization header").with_request_id(&request_id),
+                    GatewayError::new("Missing Authorization header")
+                        .with_request_id(&request_id),
                 );
             }
         };
-
         match validate_jwt(token, &data.config.jwt_secret) {
-            Ok(c) => {
-                claims = Some(c);
-            }
+            Ok(c) => { claims = Some(c); }
             Err(reason) => {
                 warn!(request_id = %request_id, reason, "JWT validation failed");
                 return HttpResponse::Unauthorized()
@@ -278,7 +218,7 @@ async fn proxy(req: HttpRequest, body: web::Bytes, data: web::Data<AppState>) ->
         }
     }
 
-    // ── 3. Build upstream request ──────────────────────────────────────────
+    // 3. Build upstream request
     let upstream_url = build_upstream_url(&data.config, &req);
     info!(request_id = %request_id, method = %req.method(), url = %upstream_url, "Forwarding request");
 
@@ -292,45 +232,29 @@ async fn proxy(req: HttpRequest, body: web::Bytes, data: web::Data<AppState>) ->
 
     let mut headers = reqwest::header::HeaderMap::new();
 
-    // Forward safe headers from the client (strip hop-by-hop / security headers)
+    // Forward safe client headers, strip hop-by-hop and security-sensitive ones
     for (name, value) in req.headers() {
         let lower = name.as_str().to_lowercase();
         if matches!(
             lower.as_str(),
-            "connection"
-            | "keep-alive"
-            | "proxy-authenticate"
-            | "proxy-authorization"
-            | "te"
-            | "trailers"
-            | "transfer-encoding"
-            | "upgrade"
-            // Strip the original Authorization; downstream gets X-User-ID instead
-            | "authorization"
-            | "host"
-            // Prevent client spoofing of gateway metadata headers
-            | "x-gateway-secret"
-            | "x-user-id"
-            | "x-user-role"
+            "connection" | "keep-alive" | "proxy-authenticate" | "proxy-authorization"
+            | "te" | "trailers" | "transfer-encoding" | "upgrade"
+            | "authorization" | "host"
+            | "x-gateway-secret" | "x-user-id" | "x-user-role"
         ) {
             continue;
         }
-        if let Ok(hval) = reqwest::header::HeaderValue::from_str(&data.config.jwt_secret) {
-            headers.insert("X-Gateway-Secret", hval);
-        } {
-            headers.insert(hname, hval);
+        if let Ok(hname) = reqwest::header::HeaderName::from_bytes(name.as_str().as_bytes()) {
+            if let Ok(hval) = reqwest::header::HeaderValue::from_bytes(value.as_bytes()) {
+                headers.insert(hname, hval);
+            }
         }
     }
 
-    // Inject gateway-side metadata headers
-    // SECURITY: never trust X-Forwarded-For from client; set it ourselves.
-    // client_ip was captured above (before rate-limit check) so reuse it.
+    // Inject gateway metadata headers
     headers.insert("X-Request-ID", request_id.as_str().parse().unwrap());
     headers.insert("X-Gateway", "rust-actix/1.0".parse().unwrap());
     headers.insert("X-Forwarded-For", client_ip.parse().unwrap());
-    if let Ok(hval) = reqwest::header::HeaderValue::from_str(&data.config.jwt_secret) {
-        headers.insert("X-Gateway-Secret", hval);
-    }
 
     if let Some(c) = claims {
         if let Ok(hval) = reqwest::header::HeaderValue::from_str(&c.sub) {
@@ -343,7 +267,7 @@ async fn proxy(req: HttpRequest, body: web::Bytes, data: web::Data<AppState>) ->
         }
     }
 
-    // ── 4. Send to backend ─────────────────────────────────────────────────
+    // 4. Forward to Flask
     let upstream_result = data
         .http_client
         .request(method, &upstream_url)
@@ -378,29 +302,37 @@ async fn proxy(req: HttpRequest, body: web::Bytes, data: web::Data<AppState>) ->
                 if matches!(lower.as_str(), "transfer-encoding" | "connection") {
                     continue;
                 }
-                if let Ok(hval) = actix_web::http::header::HeaderValue::from_bytes(value.as_bytes()) {
-                    client_resp.insert_header((
-                        actix_web::http::header::HeaderName::from_bytes(name.as_str().as_bytes()).unwrap(),
-                        hval,
-                    ));
+                if let Ok(hname) = actix_web::http::header::HeaderName::from_bytes(
+                    name.as_str().as_bytes(),
+                ) {
+                    if let Ok(hval) = actix_web::http::header::HeaderValue::from_bytes(
+                        value.as_bytes(),
+                    ) {
+                        client_resp.insert_header((hname, hval));
+                    }
                 }
             }
 
+            // Security hardening headers
             client_resp.insert_header(("X-Request-ID", request_id.as_str()));
+            client_resp.insert_header(("X-Content-Type-Options", "nosniff"));
+            client_resp.insert_header(("X-Frame-Options", "DENY"));
+            client_resp.insert_header((
+                "Strict-Transport-Security",
+                "max-age=63072000; includeSubDomains; preload",
+            ));
+            client_resp.insert_header(("Server", ""));
             client_resp.body(body_bytes)
         }
 
         Err(e) => {
             error!(request_id = %request_id, error = %e, "Upstream unreachable");
             HttpResponse::BadGateway()
-                .json(GatewayError::new("Backend service unavailable").with_request_id(&request_id))
+                .json(GatewayError::new("Backend service unavailable")
+                    .with_request_id(&request_id))
         }
     }
 }
-
-// ─────────────────────────────────────────────
-// Entry point
-// ─────────────────────────────────────────────
 
 #[actix_web::main]
 async fn main() -> std::io::Result<()> {
@@ -414,12 +346,10 @@ async fn main() -> std::io::Result<()> {
         .init();
 
     let config = Config::from_env();
-
     let quota = Quota::per_second(config.rate_limit_rps).allow_burst(config.rate_limit_burst);
     let rate_limiters: Arc<DashMap<String, (IpLimiter, std::time::Instant)>> =
         Arc::new(DashMap::new());
 
-    // Spawn background worker to asynchronously evict stale limiters
     let rate_limiters_cleanup = rate_limiters.clone();
     tokio::spawn(async move {
         loop {
@@ -431,7 +361,6 @@ async fn main() -> std::io::Result<()> {
         }
     });
 
-    // Reuse a single HTTP client across all requests (connection-pooled)
     let http_client = Client::builder()
         .timeout(Duration::from_secs(30))
         .build()
@@ -447,13 +376,9 @@ async fn main() -> std::io::Result<()> {
     let allowed_origins = config.allowed_origins.clone();
     let port = config.port;
 
-    info!(
-        "Gateway starting on :{port}, proxying → {}",
-        config.backend_url
-    );
+    info!("Gateway starting on :{port}, proxying -> {}", config.backend_url);
 
     HttpServer::new(move || {
-        // Build CORS middleware from config
         let cors = allowed_origins.iter().fold(
             Cors::default()
                 .allowed_methods(vec!["GET", "POST", "PUT", "DELETE", "OPTIONS"])
@@ -471,9 +396,7 @@ async fn main() -> std::io::Result<()> {
             .wrap(cors)
             .wrap(Logger::default())
             .app_data(state.clone())
-            // Unauthenticated gateway health probe
             .route("/health", web::get().to(health))
-            // All other requests → authenticated proxy
             .default_service(web::to(proxy))
     })
     .workers(num_cpus())
